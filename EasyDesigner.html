@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="author" content="wushen_zhong" />
+  <meta name="viewport" content="width=device-width" />
+  <title>EasyDesigner</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body>
+
+  <div id="root" o:def="{ rightClickedElement: null }" o:oncontextmenu="{ e.preventDefault() }">
+
+    <div id="rightClickMenu" class="bg-neutral-300 border-2 fixed hidden z-10 p-2" draggable="true" o:def="{ startOffsetX: 0, startOffsetY: 0 }"
+      o:ondragstart="{ [$.startOffsetX, $.startOffsetY] = [e.offsetX, e.offsetY] }"
+      o:ondragend="{ [this.style.left, this.style.top] = [`${this.offsetLeft + e.offsetX - $.startOffsetX}px`, `${this.offsetTop + e.offsetY - $.startOffsetY}px`]}">
+      <div id="elePath"></div>
+      <div class="flex" o:def="{ selectElement: null, copiedElement: null }">
+        <div o:template="my-but" class="bg-white border border-neutral-500 p-0.5"></div>
+        <my-but o:onclick="{ $.rightClickedElement.append(document.createElement('my-blo')) }">添加</my-but>
+        <my-but o:onclick="{
+          if($.rightClickedElement === document.getElementById('container'))
+            return
+          let parent = $.rightClickedElement.parentElement
+          $.rightClickedElement.remove()
+          parent.dispatchEvent(new MouseEvent('mouseup', { button: 2, bubbles: true }))
+        }">
+          删除
+        </my-but>
+        <my-but o:onclick="{  $.copiedElement = $.rightClickedElement.cloneNode(true) }">
+          ${$.copiedElement == null ? '' : '已'}复制
+        </my-but>
+        <my-but o:onclick="{
+          $.rightClickedElement.append($.copiedElement)
+          $.copiedElement = null
+        }">
+          粘贴
+        </my-but>
+        <my-but o:onclick="{ $.selectElement = $.rightClickedElement }">
+          ${$.selectElement == null ? '' : '已'}选择
+        </my-but>
+        <my-but o:def="{
+          createMutationObserver: (ele1, ele2) => {
+            new MutationObserver((mutationRecordList, observer) => {
+              if (ele1.className != mutationRecordList[0].target.className)
+                ele1.className = mutationRecordList[0].target.className
+            }).observe(ele2, { attributeFilter: ['class'] })
+          }
+        }" o:onclick="{
+          let ele1 = $.selectElement
+          let ele2 = $.rightClickedElement
+          $.createMutationObserver(ele1, ele2)
+          $.createMutationObserver(ele2, ele1)
+        }">
+          链接
+        </my-but>
+        <my-but o:onclick="{
+          showOpenFilePicker()
+            .then(fileSystemFileHandleArray => fileSystemFileHandleArray[0].getFile(), () => { })
+            .then(file => file.text())
+            .then(text => document.getElementById('container').outerHTML = text)
+            .catch(() => {})
+        }">
+          打开
+        </my-but>
+        <my-but o:onclick="{
+          showSaveFilePicker()
+            .then(fileSystemFileHandle => fileSystemFileHandle.createWritable(), () => { })
+            .then(fileSystemWritableFileStream => {
+                fileSystemWritableFileStream.write(document.getElementById('container').outerHTML)
+                fileSystemWritableFileStream.close()
+            })
+            .catch(() => {})
+        }">
+          保存
+        </my-but>
+      </div>
+      <div>
+        <div class="flex" o:def="{ index: 0 }">
+          <div o:template="my-tab-but" class="border" o:def="{ i: 0 }" o:onclick="{
+            const tabs = document.getElementById('tabs')
+            for(const ele of tabs.children)
+              ele.classList.add('hidden')
+              tabs.children[$.i].classList.remove('hidden')
+          }" o:run="{ $.i = $.index++ }">
+          </div>
+          <my-tab-but>元素</my-tab-but>
+          <my-tab-but>样式</my-tab-but>
+          <my-tab-but>文本</my-tab-but>
+        </div>
+        <div id="tabs">
+          <div o:template="my-tab" class="hidden"></div>
+          <my-tab></my-tab>
+          <my-tab o:run="{ this.classList.remove('hidden') }">
+            <textarea id="classEditor" class="w-full h-[200px]" o:onkeyup="{ if (this.value != '') $.rightClickedElement.className = this.value }">
+            </textarea>
+          </my-tab>
+          <my-tab>
+            <textarea id="textEditor" class="w-full h-[200px]" o:onkeyup="{
+              if (this.value == '')
+                return
+              for (const node of $.rightClickedElement.childNodes)
+                if (node.nodeType == Node.TEXT_NODE)
+                  $.rightClickedElement.removeChild(node)
+              $.rightClickedElement.append(this.value)
+            }">
+            </textarea>
+          </my-tab>
+        </div>
+      </div>
+    </div>
+
+    <div id="container" class="fixed h-full w-full" o:onmouseup="{
+      const [rightClickMenu, elePath, classEditor, textEditor] =
+        ['rightClickMenu', 'elePath', 'classEditor', 'textEditor'].map(id => document.getElementById(id))
+      rightClickMenu.classList.add('hidden')
+      if (e.button !== 2)
+        return
+      $.rightClickedElement = e.target
+      let path = ''
+      for (let ele = $.rightClickedElement; ele !== this; ele = ele.parentElement || ele.parentNode.host)
+        path = '/' + ele.tagName.toLowerCase() + path
+      elePath.textContent = '$' + path.slice(1)
+      classEditor.value = $.rightClickedElement.className
+      classEditor.focus()
+      let temp = ''
+      for (const node of $.rightClickedElement.childNodes)
+        if (node.nodeType == Node.TEXT_NODE)
+          temp += node.nodeValue
+      textEditor.value = temp
+      rightClickMenu.classList.remove('hidden')
+    }">
+      <div o:template="my-blo" class="bg-amber-950 h-20 w-20"></div>
+    </div>
+
+  </div>
+
+  <script type="module">
+    import Mutater from './Oframework.mjs'
+    new Mutater({ eventArgumentName: 'e' }).mutate(document.getElementById('root'))
+  </script>
+
+</body>
+
+</html>
