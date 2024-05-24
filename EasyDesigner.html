@@ -12,7 +12,7 @@
 
 <body>
 
-  <div id="root" o:let="{ rightClickedElement: null }" o:oncontextmenu="{console.log([event, ev]); event.preventDefault() }">
+  <div id="root" o:let="{ rightClickedElement: null }" o:oncontextmenu="{ event.preventDefault() }">
 
     <div id="rightClickMenu" class="bg-neutral-300 border-2 fixed hidden z-10 p-2" draggable="true" o:let="{ startOffsetX: 0, startOffsetY: 0 }"
       o:ondragstart="{ [$.startOffsetX, $.startOffsetY] = [event.offsetX, event.offsetY] }"
