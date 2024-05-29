@@ -29,8 +29,8 @@ function getHostElement(beginEle, key) {
   ) {
     if (Object.hasOwn(ele, key))
       return ele
-    if (Object.hasOwn(ele.dataset, key))
-      return ele.dataset
+    // if (Object.hasOwn(ele.dataset, key))
+    //   return ele.dataset
   }
   return null
 }
@@ -152,16 +152,6 @@ function defineVariable(ele, key, value) {
         })
     }
   })
-}
-
-function hideElement(ele) {
-  if (ele.hasAttribute('style')) {
-    ele.setAttribute('style', ele.getAttribute('style') + '; display: none;')
-    return true
-  } else {
-    ele.setAttribute('style', '; display: none;')
-    return false
-  }
 }
 
 /**
