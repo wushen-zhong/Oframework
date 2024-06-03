@@ -90,7 +90,7 @@
             for(const ele of tabs.children)
               ele.classList.add('hidden')
               tabs.children[$.i].classList.remove('hidden')
-          }" o:run="{ $.i = $.index++ }">
+          }" o:init="{ $.i = $.index++ }">
           </div>
           <my-tab-but>元素</my-tab-but>
           <my-tab-but>类</my-tab-but>
@@ -99,7 +99,7 @@
         <div id="tabs">
           <div o:define="my-tab" class="hidden"></div>
           <my-tab></my-tab>
-          <my-tab o:run="{ this.classList.remove('hidden') }">
+          <my-tab o:init="{ this.classList.remove('hidden') }">
             <textarea id="classEditor" class="w-full h-[200px]" o:onkeyup="{ if (this.value != '') $.rightClickedElement.className = this.value }">
             </textarea>
           </my-tab>

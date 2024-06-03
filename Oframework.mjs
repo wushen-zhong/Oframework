@@ -67,11 +67,6 @@ function convertAttributes(ele) {
  * @returns {Element}
  */
 function extendElement(ele, $proxy) {
-  if (!(ele instanceof Element)) {
-    console.error(ele)
-    throw new TypeError(`Invalid argument: ${Object.prototype.toString.call(ele)}.`)
-  }
-
   const templateEle = templateElements[ele.tagName.toLowerCase()]
   if (templateEle === undefined)
     return ele
@@ -165,11 +160,15 @@ function mutate(ele) {
     return null
 
   if (ele.hasAttribute(config.defineAttributeName)) {
-    for (const templateEle of [ele, ...ele.querySelectorAll('*[o\\:template]')]) {
-      convertAttributes(templateEle)
-      templateElements[ele.getAttribute(config.defineAttributeName)] = templateEle
-      templateEle.remove()
-    }
+    [ele, ...ele.querySelectorAll('*[o\\:template]')]
+      .map(templateEle => {
+        templateEle.remove()
+        return templateEle
+      })
+      .forEach(templateEle => {
+        convertAttributes(templateEle)
+        templateElements[ele.getAttribute(config.defineAttributeName)] = templateEle
+      })
     return null
   }
 
@@ -302,6 +301,8 @@ window.addEventListener('DOMContentLoaded', () => {
       JSON.parse(
         document.body.getAttribute(config.backupAttributeName),
         (_key, value) => {
+          if (typeof value == "object")
+            return value
           div.innerHTML = value
           return div.children[0]
         }
