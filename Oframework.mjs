@@ -1,17 +1,24 @@
 const config = {
   eventArgumentName: 'ev',
-
+  defaultPrefix: 'o:',
   defineAttributeName: 'o:define',
   letAttributeName: 'o:let',
-  onAttributeName: 'o:on',
+  dataAttributeName: 'o:data',
+  onAttributePrefix: 'o:on',
+  initAttributeName: 'o:init',
   runAttributeName: 'o:run',
-  endAttributeName: 'o:end',
   backupAttributeName: 'o:backup',
   injectAttributeName: 'o:inject',
   shadowAttributeName: 'o:shadow'
 }
 
-const templateElements = new Map()
+const templateElements = new Proxy({}, {
+  get: (target, p) => target[p],
+  set: (target, p, newValue) => {
+    target[p] = newValue
+    document.body.setAttribute('o:backup', JSON.stringify(target, (_key, value) => value.outerHTML))
+  }
+})
 let injectList = []
 const mutatedWeakSet = new WeakSet()
 
@@ -22,16 +29,9 @@ const mutatedWeakSet = new WeakSet()
  * @returns {Element|null}
  */
 function getHostElement(beginEle, key) {
-  for (
-    let ele = beginEle;
-    ele !== null && ele !== undefined;
-    ele = ele.parentElement ?? ele.parentNode?.host
-  ) {
+  for (let ele = beginEle; ele !== null; ele = ele.parentElement)
     if (Object.hasOwn(ele, key))
       return ele
-    // if (Object.hasOwn(ele.dataset, key))
-    //   return ele.dataset
-  }
   return null
 }
 
@@ -41,16 +41,16 @@ function getHostElement(beginEle, key) {
  */
 function convertAttributes(ele) {
   for (const { name, value } of ele.attributes)
-    if (name.startsWith(config.onAttributeName) && value.startsWith('{'))
+    if (name.startsWith(config.onAttributePrefix) && value.startsWith('{'))
       ele.setAttribute(name, `[function (${config.eventArgumentName}) ${value}]`)
+
+  const oinitValue = ele.getAttribute(config.initAttributeName)
+  if (oinitValue?.startsWith('{'))
+    ele.setAttribute(config.initAttributeName, `[function () ${oinitValue}]`)
 
   const orunValue = ele.getAttribute(config.runAttributeName)
   if (orunValue?.startsWith('{'))
     ele.setAttribute(config.runAttributeName, `[function () ${orunValue}]`)
-
-  const oendValue = ele.getAttribute(config.endAttributeName)
-  if (oendValue?.startsWith('{'))
-    ele.setAttribute(config.endAttributeName, `[function () ${oendValue}]`)
 }
 
 /**
@@ -64,7 +64,7 @@ function extendElement(ele, $proxy) {
     throw new TypeError(`Invalid argument: ${Object.prototype.toString.call(ele)}.`)
   }
 
-  const templateEle = templateElements.get(ele.tagName.toLowerCase())
+  const templateEle = templateElements[ele.tagName.toLowerCase()]
   if (templateEle === undefined)
     return ele
   const parentEle = templateEle.cloneNode(true)
@@ -73,7 +73,7 @@ function extendElement(ele, $proxy) {
   for (const { name, value } of ele.attributes) {
     if (parentEle.hasAttribute(name)) {
       const parentValue = parentEle.getAttribute(name)
-      if (name == config.letAttributeName || name.startsWith(config.onAttributeName) || name == config.runAttributeName)
+      if (name == config.letAttributeName || name.startsWith(config.onAttributePrefix) || name == config.initAttributeName)
         parentEle.setAttribute(name, parentValue.slice(0, -1) + ', ' + value.slice(1))
       else if (name == 'class')
         parentEle.setAttribute(name, parentValue + ' ' + value)
@@ -125,33 +125,24 @@ function checkAttribute(ele, name, value) {
  * 
  * @param {Element} ele
  * @param {string} key
- * @param {} value
  */
-function defineVariable(ele, key, value) {
-  Object.defineProperty(ele, key, {
-    get: () => value,
-    set: (v) => {
-      value = v
-      injectList = injectList.filter(([weakEle, _usedKey]) => weakEle.deref() !== undefined)
-      injectList
-        .map(([weakEle, usedKey]) => [weakEle.deref(), usedKey])
-        .filter(([eleHasOinject, usedKey]) => ele.contains(eleHasOinject) && key == usedKey)
-        .forEach(([eleHasOinject, usedKey]) => {
-          for (
-            let hostEle = eleHasOinject;
-            hostEle !== null && hostEle !== undefined;
-            hostEle = hostEle.parentElement ?? hostEle.parentNode?.host
-          ) {
-            if (Object.hasOwn(hostEle, usedKey) && ele === hostEle) {
-              eleHasOinject.innerHTML = Function('$', `return \`${eleHasOinject.getAttribute(config.injectAttributeName)}\``).call(eleHasOinject, new Proxy({}, {
-                get: (_target, p) => getHostElement(eleHasOinject, p)[p],
-                set: (_target, p, newValue) => getHostElement(eleHasOinject, p)[p] = newValue
-              }))
-            }
-          }
-        })
-    }
-  })
+function updateInject(ele, key) {
+  injectList = injectList.filter(([weakEle]) => weakEle.deref() !== undefined)
+  injectList
+    .map(([weakEle, usedKey, handle]) => [weakEle.deref(), usedKey, handle])
+    .filter(([eleNeedInject, usedKey]) => ele.contains(eleNeedInject) && key == usedKey)
+    .filter(([eleNeedInject]) => {
+      for (let hostEle = eleNeedInject; hostEle !== null; hostEle = hostEle.parentElement)
+        if (ele === hostEle)
+          return true
+      return false
+    })
+    .forEach(([eleNeedInject, , handle]) => {
+      handle(eleNeedInject, new Proxy({}, {
+        get: (_target, p) => getHostElement(eleNeedInject, p)[p],
+        set: (_target, p, newValue) => getHostElement(eleNeedInject, p)[p] = newValue
+      }))
+    })
 }
 
 /**
@@ -166,30 +157,11 @@ function mutate(ele) {
     return null
 
   if (ele.hasAttribute(config.defineAttributeName)) {
-    let obackup
-    if (ele.parentElement.hasAttribute(config.backupAttributeName))
-      obackup = JSON.parse(ele.parentElement.getAttribute(config.backupAttributeName))
-    else
-      obackup = []
-    const parentEle = ele.parentElement
-    const documentFragment = document.createDocumentFragment()
     for (const templateEle of [ele, ...ele.querySelectorAll('*[o\\:template]')]) {
       convertAttributes(templateEle)
-      documentFragment.append(templateEle)
+      templateElements[ele.getAttribute(config.defineAttributeName)] = templateEle
     }
-    for (const templateEle of documentFragment.children) {
-      templateElements.set(templateEle.getAttribute(config.defineAttributeName), templateEle)
-      obackup.push(templateEle.outerHTML)
-    }
-    parentEle.setAttribute(config.backupAttributeName, JSON.stringify(obackup))
     return null
-  }
-
-  if (ele.hasAttribute(config.backupAttributeName)) {
-    const documentFragment = document.createElement('div')
-    documentFragment.innerHTML = JSON.parse(ele.getAttribute(config.backupAttributeName)).join('')
-    for (const templateEle of documentFragment.children)
-      templateElements.set(templateEle.getAttribute(config.defineAttributeName), templateEle)
   }
 
   if (ele.hasAttribute('style')) {
@@ -216,35 +188,69 @@ function mutate(ele) {
     ele = extendedEle
   }
 
+  if (ele.hasAttribute(config.dataAttributeName)) {
+    let odataValue = ele.getAttribute(config.dataAttributeName)
+    checkAttribute(ele, config.dataAttributeName, odataValue)
+    odataValue = Function('$', `return ${odataValue}`).call(ele, $proxy)
+    for (const key in odataValue) {
+      Object.defineProperty(ele, key, {
+        get: () => odataValue[key],
+        set: (v) => {
+          odataValue[key] = v
+          ele.setAttribute(config.dataAttributeName, JSON.stringify(odataValue))
+          updateInject(ele, key)
+        }
+      })
+    }
+  }
+
   if (ele.hasAttribute(config.letAttributeName)) {
     const odefValue = ele.getAttribute(config.letAttributeName)
     checkAttribute(ele, config.letAttributeName, odefValue)
-    const defObj = Function('$', `return ${odefValue}`).call(ele, $proxy)
-    for (const [key, value] of Object.entries(defObj))
-      defineVariable(ele, key, value)
+    for (let [key, value] of Object.entries(Function('$', `return ${odefValue}`).call(ele, $proxy))) {
+      Object.defineProperty(ele, key, {
+        get: () => value,
+        set: (v) => {
+          value = v
+          updateInject(ele, key)
+        }
+      })
+    }
   }
 
-  const onAttributeNameLength = config.onAttributeName.length
   for (const { name, value } of ele.attributes) {
-    if (name.startsWith(config.onAttributeName)) {
+    if (name.startsWith(config.onAttributePrefix)) {
       checkAttribute(ele, name, value)
       Function('$', `return ${value}`)
         .call(ele, $proxy)
-        .reverse()
-        .forEach(handle => ele.addEventListener(name.slice(onAttributeNameLength), handle))
+        .forEach(handle => ele.addEventListener(name.slice(config.onAttributePrefix.length), handle))
     }
   }
+
+  [...ele.attributes]
+    .filter(({ name }) => ![
+      config.defineAttributeName, config.letAttributeName, config.initAttributeName, config.runAttributeName,
+      config.backupAttributeName, config.injectAttributeName, config.shadowAttributeName
+    ].includes(name))
+    .filter(({ name }) => !name.startsWith(config.onAttributePrefix))
+    .filter(({ name }) => name.startsWith(config.defaultPrefix))
+    .forEach(({ name, value }) => {
+      const handle = (ele_, $proxy_) => ele_.setAttribute(name.slice(config.defaultPrefix.length), Function('$', `return \`${value}\``).call(ele_, $proxy_))
+      Function('$', `return \`${value}\``).call(ele, new Proxy({}, {
+        get: (_target, p) => injectList.push([new WeakRef(ele), p, handle])
+      }))
+      handle(ele, $proxy)
+    })
 
   ele.setAttribute('style', ele.getAttribute('style').slice(0, -16))
   if (noStyle)
     ele.removeAttribute('style')
 
-  if (ele.hasAttribute(config.runAttributeName)) {
-    const orunValue = ele.getAttribute(config.runAttributeName)
-    checkAttribute(ele, config.runAttributeName, orunValue)
-    Function('$', `return ${orunValue}`)
+  if (ele.hasAttribute(config.initAttributeName)) {
+    const oinitValue = ele.getAttribute(config.initAttributeName)
+    checkAttribute(ele, config.initAttributeName, oinitValue)
+    Function('$', `return ${oinitValue}`)
       .call(ele, $proxy)
-      .reverse()
       .forEach(handle => handle.call(ele))
   }
 
@@ -254,10 +260,11 @@ function mutate(ele) {
       oinjectValue = ele.innerHTML
       ele.setAttribute(config.injectAttributeName, oinjectValue)
     }
+    const handle = (ele_, $proxy_) => ele_.innerHTML = Function('$', `return \`${oinjectValue}\``).call(ele_, $proxy_)
     Function('$', `return \`${oinjectValue}\``).call(ele, new Proxy({}, {
-      get: (_target, p) => injectList.push([new WeakRef(ele), p])
+      get: (_target, p) => injectList.push([new WeakRef(ele), p, handle])
     }))
-    ele.innerHTML = Function('$', `return \`${oinjectValue}\``).call(ele, $proxy)
+    handle(ele, $proxy)
   }
 
   if (ele.shadowRoot !== null)
@@ -266,12 +273,11 @@ function mutate(ele) {
   for (const child of [...ele.children])
     mutate(child)
 
-  if (ele.hasAttribute(config.endAttributeName)) {
-    const oendValue = ele.getAttribute(config.endAttributeName)
-    checkAttribute(ele, config.endAttributeName, oendValue)
-    Function('$', `return ${oendValue}`)
+  if (ele.hasAttribute(config.runAttributeName)) {
+    const orunValue = ele.getAttribute(config.runAttributeName)
+    checkAttribute(ele, config.runAttributeName, orunValue)
+    Function('$', `return ${orunValue}`)
       .call(ele, $proxy)
-      .reverse()
       .forEach(handle => handle.call(ele))
   }
 
@@ -279,6 +285,20 @@ function mutate(ele) {
 }
 
 window.addEventListener('DOMContentLoaded', () => {
+  if (document.body.hasAttribute(config.backupAttributeName)) {
+    const div = document.createElement('div')
+    Object.assign(
+      templateElements,
+      JSON.parse(
+        document.body.getAttribute(config.backupAttributeName),
+        (_key, value) => {
+          div.innerHTML = value
+          return div.children[0]
+        }
+      )
+    )
+  }
+
   new MutationObserver(mutationRecords => {
     mutationRecords.forEach(mutationRecord => {
       mutationRecord.addedNodes.forEach(addedNode => {
@@ -291,4 +311,4 @@ window.addEventListener('DOMContentLoaded', () => {
   mutate(document.body)
 })
 
-export default config
+export { config, templateElements }
