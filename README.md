@@ -1,6 +1,6 @@
 # Oframework
 
-Just a simple HTML / JavaScript framework. 一个简单的 HTML/JavaScript 框架。
+Just a simple HTML / JavaScript framework. 一个简单的 HTML/JavaScript 前端框架。
 
 ## 示例
 
@@ -17,7 +17,7 @@ Just a simple HTML / JavaScript framework. 一个简单的 HTML/JavaScript 框�
 <script type="module">
   import config from './Oframework.mjs'
   config.defineAttributeName = 'o:template'
-  config.letAttributeName = 'o:define'
+  config.letAttributeName = 'o:var'
 </script>
 ```
 
@@ -25,13 +25,13 @@ Just a simple HTML / JavaScript framework. 一个简单的 HTML/JavaScript 框�
 
 #### `o:let`
 
-在`div`对象上定义num变量
+在元素上定义变量
 
 ```html
 <div o:let="{ num: 1 }"></div>
 ```
 
-`o:let`、`o:on`、`o:run`、`o:end`、`o:shadow`属性值中都可以使用`$`对象来获取父元素链上定义的变量
+所有以`o:`开头的属性的值中都可以使用`$`对象来获取父元素链上定义的变量，不会跨越`shadowRoot`
 
 ```html
 <div o:let="{ num: 1 }">
@@ -39,47 +39,61 @@ Just a simple HTML / JavaScript framework. 一个简单的 HTML/JavaScript 框�
 </div>
 ```
 
-#### `o:on`
+#### `o:data`
 
-在`div`对象上定义事件监听器
+在元素上定义变量，顺序在`o:let`之前，且每次更改都会以JSON语法保存新值到`o:data`属性上
+
+```html
+<div o:data="{ num: 1 }" o:init="$.num = 2"></div>
+```
+
+转化为
+
+```html
+<div o:data="{ &quot;num&quot;: 1 }"></div>
+```
+
+#### `o:on` + 事件名
+
+在元素上定义事件监听器
 
 ```html
 <div o:onclick="{ console.log(1) }"></div>
 ```
 
 > [!NOTE]
-> 如此定义的`o:let`、`o:on`、`o:run`、`o:end`属性值中不应含有前导或尾随空字符
+> `o:data`、`o:let`属性值以及以`{}`定义`o:on`、`o:init`、`o:run`属性值中不应含有前导或尾随空字符
 
-在相同的事件上定义多个监听器，将按逆序添加
+在相同的事件上定义多个监听器，将按顺序添加
 
 ```html
-<div o:onclick="[function () { console.log(1) }, function () { console.log(2) }]"></div>
+<div o:onclick="[function (event) { console.log(1) }, function (event) { console.log(2) }]"></div>
 ```
 
-并不推荐主动使用这种方法，尽量通过继承自动实现
+不推荐主动使用这种方法，尽量通过继承自动实现
 
-#### `o:run`，`o:end`
+#### `o:init`，`o:run`
 
-`o:run`定义直接运行的代码块，将在转化完成后立即执行，此时子元素尚未转化
-`o:end`定义最终运行的代码块，将在所有子元素转化完成后执行
+`o:init`定义初始化的代码块，将在转化时立即执行，此时子元素尚未转化，执行后会删除改属性
+`o:run`定义最终运行的代码块，将在所有子元素转化完成后执行
 
 ```html
+<div o:init="{ console.log(1) }"></div>
 <div o:run="{ console.log(1) }"></div>
-<div o:end="{ console.log(1) }"></div>
 ```
 
-也可定义函数列，将按逆序执行
+也可定义函数列，将按顺序执行
 
 ```html
-<div o:run="[function () { console.log(2) }, function () { console.log(1) }]"></div>
-<div o:end="[function () { console.log(2) }, function () { console.log(1) }]"></div>
+<div o:init="[function () { console.log(1) }, function () { console.log(2) }]"></div>
+<div o:run="[function () { console.log(1) }, function () { console.log(2) }]"></div>
 ```
 
-并不推荐主动使用这种方法，尽量通过继承自动实现
+不推荐主动使用这种方法，尽量通过继承自动实现
 
 #### `o:define`
 
-定义一个模板标签，完成定义后将从文档中移除
+定义一个模板标签，转化后将从文档中移除
 
 ```html
 <div o:define="bob"></div>
@@ -175,9 +189,9 @@ Just a simple HTML / JavaScript framework. 一个简单的 HTML/JavaScript 框�
 
 #### `o:backup`
 
-所有`o:define`定义的新标签将会先以字符串数组的形式储存在定义时的父标签`o:backup`属性中，并从文档中移除
+所有`o:define`定义的新标签将会以字符串数组的形式储存在`body`标签`o:backup`属性中，并从文档中移除
 
-转化含有`o:backup`属性的标签时会解析其值并定义新标签。由于`o:define`定义新标签时父标签已经完成转化，所以不会重复定义
+最开始转化时会先解析`body`元素的`o:backup`属性值并定义新标签。
 
 #### `o:inject`
 
@@ -203,7 +217,7 @@ Just a simple HTML / JavaScript framework. 一个简单的 HTML/JavaScript 框�
 
 #### `config.eventArgumentName` \<string>
 
-`o:on`定义的事件监听器方法中的事件对象名
+`o:on`定义的事件监听器方法事件对象参数名，默认值：`event`
 
 #### `config.defineAttributeName` \<string>
 
@@ -213,17 +227,21 @@ Just a simple HTML / JavaScript framework. 一个简单的 HTML/JavaScript 框�
 
 定义变量的属性名，默认值：`o:let`
 
+#### `config.dataAttributeName` \<string>
+
+定义存档变量的属性名，默认值：`o:data`
+
 #### `config.onAttributeName` \<string>
 
 定义事件监听器的属性名的开头，默认值：`o:on`
 
+#### `config.initAttributeName` \<string>
+
+定义立刻执行方法的属性名，默认值：`o:init`
+
 #### `config.runAttributeName` \<string>
 
-定义立刻执行方法的属性名，默认值：`o:run`
-
-#### `config.endAttributeName` \<string>
-
-定义最终执行方法的属性名，默认值：`o:end`
+定义最终执行方法的属性名，默认值：`o:run`
 
 #### `config.backupAttributeName` \<string>
 
@@ -236,3 +254,14 @@ Just a simple HTML / JavaScript framework. 一个简单的 HTML/JavaScript 框�
 #### `config.shadowAttributeName` \<string>
 
 定义`attachShadow`的参数的属性名，默认值：`o:shadow`
+
+### `templateElements`
+
+储存模板元素，对象属性名为模板元素所对应的标签名。通过代码引入模板元素：
+
+```html
+<script type="module">
+  import templateElements from './Oframework.mjs'
+  templateElements['newTag'] = document.createElement('div')
+</script>
+```

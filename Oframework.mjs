@@ -1,5 +1,5 @@
 const config = {
-  eventArgumentName: 'ev',
+  eventArgumentName: 'event',
   defaultPrefix: 'o:',
   defineAttributeName: 'o:define',
   letAttributeName: 'o:let',
@@ -16,7 +16,15 @@ const templateElements = new Proxy({}, {
   get: (target, p) => target[p],
   set: (target, p, newValue) => {
     target[p] = newValue
-    document.body.setAttribute('o:backup', JSON.stringify(target, (_key, value) => value.outerHTML))
+    let isInitial = true
+    document.body.setAttribute(config.backupAttributeName, JSON.stringify(target, (_key, value) => {
+      if (isInitial) {
+        isInitial = false
+        return value
+      }
+      return value.outerHTML
+    }))
+    return true
   }
 })
 let injectList = []
@@ -160,6 +168,7 @@ function mutate(ele) {
     for (const templateEle of [ele, ...ele.querySelectorAll('*[o\\:template]')]) {
       convertAttributes(templateEle)
       templateElements[ele.getAttribute(config.defineAttributeName)] = templateEle
+      templateEle.remove()
     }
     return null
   }
