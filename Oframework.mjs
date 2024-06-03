@@ -261,6 +261,7 @@ function mutate(ele) {
     Function('$', `return ${oinitValue}`)
       .call(ele, $proxy)
       .forEach(handle => handle.call(ele))
+    ele.removeAttribute(config.initAttributeName)
   }
 
   if (ele.hasAttribute(config.injectAttributeName)) {

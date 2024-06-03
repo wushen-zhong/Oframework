@@ -41,7 +41,7 @@ Just a simple HTML / JavaScript framework. 一个简单的 HTML/JavaScript 前�
 
 #### `o:data`
 
-在元素上定义变量，顺序在`o:let`之前，且每次更改都会以JSON语法保存新值到`o:data`属性上
+在元素上定义变量，顺序在`o:let`之前，且每次更改都会以JSON语法保存新值到`o:data`属性上，因此此属性只应用来定义需要持久化的变量
 
 ```html
 <div o:data="{ num: 1 }" o:init="$.num = 2"></div>
@@ -209,6 +209,20 @@ Just a simple HTML / JavaScript framework. 一个简单的 HTML/JavaScript 前�
 
 ```html
 <div o:let="{ num: 1 }" inject="\n  ${$.num}\n"></div>
+```
+
+### 其它属性
+
+特别的，除以上属性外，其它任意属性都可以通过`o:`前缀来对属性值进行类似于`o:inject`的处理
+
+```html
+<div o:let="{ num: 1 }" o:style="width: ${$.num}%;"></div>
+```
+
+将转化为
+
+```html
+<div o:let="{ num: 1 }" o:style="width: 1%;"></div>
 ```
 
 ### JavaScript API
