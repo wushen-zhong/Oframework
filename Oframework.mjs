@@ -133,13 +133,8 @@ function updateInject(ele, key) {
   injectList = injectList.filter(([weakEle]) => weakEle.deref() !== undefined)
   injectList
     .map(([weakEle, usedKey, handle]) => [weakEle.deref(), usedKey, handle])
-    .filter(([eleNeedInject, usedKey]) => ele.contains(eleNeedInject) && key == usedKey)
-    .filter(([eleNeedInject]) => {
-      for (let hostEle = eleNeedInject; hostEle !== null; hostEle = hostEle.parentElement)
-        if (ele === hostEle)
-          return true
-      return false
-    })
+    .filter(([, usedKey]) => key == usedKey)
+    .filter(([eleNeedInject, usedKey]) => ele === getHostElement(eleNeedInject, usedKey))
     .forEach(([eleNeedInject, , handle]) => {
       handle(eleNeedInject, new Proxy({}, {
         get: (_target, p) => getHostElement(eleNeedInject, p)[p],
@@ -271,7 +266,11 @@ function mutate(ele) {
     }
     const handle = (ele_, $proxy_) => ele_.innerHTML = Function('$', `return \`${oinjectValue}\``).call(ele_, $proxy_)
     Function('$', `return \`${oinjectValue}\``).call(ele, new Proxy({}, {
-      get: (_target, p) => injectList.push([new WeakRef(ele), p, handle])
+      get: (_target, p) => {
+        injectList.push([new WeakRef(ele), p, handle])
+        return getHostElement(ele, p)[p]
+      },
+      set: () => { throw new SyntaxError(`Invalid text of injecting operation: '${oinjectValue}'.`) }
     }))
     handle(ele, $proxy)
   }

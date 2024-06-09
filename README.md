@@ -199,6 +199,9 @@ Just a simple HTML / JavaScript framework. 一个简单的 HTML/JavaScript 前�
 
 若为空值，将先把`innerHTML`的值赋值为`o:inject`的属性值
 
+> [!NOTE]
+> 由于会出现死循环，因此文本中不能出现赋值操作，像`a++`等
+
 ```html
 <div o:let="{ num: 1 }" inject>
   ${$.num}
