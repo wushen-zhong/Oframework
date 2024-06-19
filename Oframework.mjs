@@ -73,12 +73,32 @@ function extendElement(ele, $proxy) {
   const parentEle = templateEle.cloneNode(true)
   parentEle.removeAttribute(config.defineAttributeName)
 
-  for (const { name, value } of ele.attributes) {
-    if (parentEle.hasAttribute(name)) {
-      const parentValue = parentEle.getAttribute(name)
-      if (name == config.letAttributeName || name.startsWith(config.onAttributePrefix) || name == config.initAttributeName)
+  for (let { name, value } of ele.attributes) {
+    let parentValue
+    if (name.startsWith(config.defaultPrefix)) {
+      if (parentEle.hasAttribute(name)) {
+        parentValue = parentEle.getAttribute(name)
+      } else {
+        const noPrefixName = name.slice(config.defaultPrefix.length)
+        if (parentEle.hasAttribute(noPrefixName)) {
+          parentValue = parentEle.getAttribute(noPrefixName)
+          parentEle.removeAttribute(noPrefixName)
+        }
+      }
+    } else {
+      const prefixName = config.defaultPrefix + name
+      if (parentEle.hasAttribute(prefixName)) {
+        name = prefixName
+        parentValue = parentEle.getAttribute(prefixName)
+      } else if (parentEle.hasAttribute(name)) {
+        parentValue = parentEle.getAttribute(name)
+      }
+    }
+    if (parentValue !== undefined) {
+      if (name == config.dataAttributeName || name == config.letAttributeName || name.startsWith(config.onAttributePrefix)
+        || name == config.initAttributeName || name == config.runAttributeName)
         parentEle.setAttribute(name, parentValue.slice(0, -1) + ', ' + value.slice(1))
-      else if (name == 'class')
+      else if (name == 'class' || name == config.defaultPrefix + 'class')
         parentEle.setAttribute(name, parentValue + ' ' + value)
       else
         parentEle.setAttribute(name, parentValue + value)
@@ -155,15 +175,11 @@ function mutate(ele) {
     return null
 
   if (ele.hasAttribute(config.defineAttributeName)) {
-    [ele, ...ele.querySelectorAll('*[o\\:template]')]
-      .map(templateEle => {
-        templateEle.remove()
-        return templateEle
-      })
-      .forEach(templateEle => {
-        convertAttributes(templateEle)
-        templateElements[ele.getAttribute(config.defineAttributeName)] = templateEle
-      })
+    [ele, ...ele.querySelectorAll(`*[${config.defineAttributeName.replaceAll(':', '\\:')}]`)].forEach(templateEle => {
+      templateEle.remove()
+      convertAttributes(templateEle)
+      templateElements[templateEle.getAttribute(config.defineAttributeName)] = templateEle
+    })
     return null
   }
 
@@ -195,6 +211,7 @@ function mutate(ele) {
     let odataValue = ele.getAttribute(config.dataAttributeName)
     checkAttribute(ele, config.dataAttributeName, odataValue)
     odataValue = Function('$', `return ${odataValue}`).call(ele, $proxy)
+    ele.setAttribute(config.dataAttributeName, JSON.stringify(odataValue))
     for (const key in odataValue) {
       Object.defineProperty(ele, key, {
         get: () => odataValue[key],
@@ -233,14 +250,18 @@ function mutate(ele) {
   [...ele.attributes]
     .filter(({ name }) => ![
       config.defineAttributeName, config.letAttributeName, config.initAttributeName, config.runAttributeName,
-      config.backupAttributeName, config.injectAttributeName, config.shadowAttributeName
+      config.backupAttributeName, config.injectAttributeName, config.shadowAttributeName, config.dataAttributeName
     ].includes(name))
     .filter(({ name }) => !name.startsWith(config.onAttributePrefix))
     .filter(({ name }) => name.startsWith(config.defaultPrefix))
     .forEach(({ name, value }) => {
       const handle = (ele_, $proxy_) => ele_.setAttribute(name.slice(config.defaultPrefix.length), Function('$', `return \`${value}\``).call(ele_, $proxy_))
       Function('$', `return \`${value}\``).call(ele, new Proxy({}, {
-        get: (_target, p) => injectList.push([new WeakRef(ele), p, handle])
+        get: (_target, p) => {
+          injectList.push([new WeakRef(ele), p, handle])
+          return getHostElement(ele, p)[p]
+        },
+        set: () => { throw new SyntaxError(`Invalid attribute value of ${name}: '${value}'.`) }
       }))
       handle(ele, $proxy)
     })
@@ -270,7 +291,7 @@ function mutate(ele) {
         injectList.push([new WeakRef(ele), p, handle])
         return getHostElement(ele, p)[p]
       },
-      set: () => { throw new SyntaxError(`Invalid text of injecting operation: '${oinjectValue}'.`) }
+      set: () => { throw new SyntaxError(`Invalid attribute value of ${config.injectAttributeName}: '${oinjectValue}'.`) }
     }))
     handle(ele, $proxy)
   }

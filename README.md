@@ -191,7 +191,7 @@ Just a simple HTML / JavaScript framework. 一个简单的 HTML/JavaScript 前�
 
 所有`o:define`定义的新标签将会以字符串数组的形式储存在`body`标签`o:backup`属性中，并从文档中移除
 
-最开始转化时会先解析`body`元素的`o:backup`属性值并定义新标签。
+转化`body`元素时会先解析`o:backup`属性值并定义新标签。
 
 #### `o:inject`
 
@@ -200,7 +200,7 @@ Just a simple HTML / JavaScript framework. 一个简单的 HTML/JavaScript 前�
 若为空值，将先把`innerHTML`的值赋值为`o:inject`的属性值
 
 > [!NOTE]
-> 由于会出现死循环，因此文本中不能出现赋值操作，像`a++`等
+> 由于会出现死循环，因此文本中不能出现赋值操作，如`a++`
 
 ```html
 <div o:let="{ num: 1 }" inject>
@@ -227,6 +227,9 @@ Just a simple HTML / JavaScript framework. 一个简单的 HTML/JavaScript 前�
 ```html
 <div o:let="{ num: 1 }" o:style="width: 1%;"></div>
 ```
+
+> [!NOTE]
+> 如果一个属性已经被`o:`修饰，则不应使用原属性
 
 ### JavaScript API
 
